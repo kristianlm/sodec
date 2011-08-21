@@ -72,8 +72,7 @@ void dochar(char c) {
 
 int main(int args, char** argv) {
   int c;
-  char* g = 0x10000;
-  *g = 3;
+
   while((c = getchar()) != EOF) {
     dochar(c);
     printf("\n");
