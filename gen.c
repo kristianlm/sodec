@@ -5,7 +5,7 @@ Kristian Lein-Mathisen
 
 #include <stdio.h>
 
-#define PULSE_LENGTH 1
+#define PULSE_LENGTH 2
 // set to true to generate pulses (vibrate)
 // set to false to generate simple digital signal (static)
 #define AUDIO_OUTPUT 0 // boolean
