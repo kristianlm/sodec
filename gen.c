@@ -37,10 +37,10 @@ void dolow() {
 }
 #else
 void dohigh() {
-  putc(ONE, stdout);
+  inflate(ONE, PULSE_LENGTH);
 }
 void dolow() {
-  putc(ZERO, stdout);
+  inflate(ZERO, PULSE_LENGTH);
 }
 #endif
 
