@@ -1,9 +1,12 @@
+
+
 /**
 Kristian
 
 */
 
 #include <stdio.h>
+#include <signal.h>
 
 #define ONE '#'
 #define ZERO '.'
@@ -19,14 +22,54 @@ Kristian
 
 
 
-#define SIGNAL_DIGITAL 2
+//#define SIGNAL_DIGITAL
 
 unsigned long pos = 0;
 
-char verbose = 20;
+char verbose = 0;
 
 int max_pulse_len = 0;
 int current_pulse_len = 0;
+#define SPECTRUM_SIZE 16
+int spectrum [ SPECTRUM_SIZE ];
+
+void spectrum_init() {
+  int i;
+  for(i = 0 ; i < SPECTRUM_SIZE ; i++)
+    spectrum[i] = 0;
+}
+void spectrum_add(int pos) {
+  static char _inited = 0;
+  if(!_inited) {
+    _inited = 1;
+    spectrum_init();
+  }
+  
+  if(pos >= SPECTRUM_SIZE) {
+    fprintf(stderr, "out of bounds %d", pos);
+    return;
+  }
+
+  spectrum[pos] ++;
+
+}
+
+void print_spectrum() {
+  int i;
+  int max_spectrum = 0;
+  for(i = 0 ; i < SPECTRUM_SIZE ; i++) {
+    if(spectrum[i] > max_spectrum) 
+      max_spectrum = spectrum[i];
+  }
+  for(i = 0 ; i < SPECTRUM_SIZE ; i++) {
+    fprintf(stderr, "%3d. ", i*0x10);
+    int j;
+    for(j = 0 ; j < (double)spectrum[i] * (80.0 / (double)max_spectrum) ; j++) 
+      fprintf(stderr, "=");
+    fprintf(stderr, "\n");
+  }
+ 
+}
 
 unsigned char sme_is_high(unsigned char signal) {
   if(signal > 0x20) return 1;
@@ -43,25 +86,26 @@ int read_signal_nobuffer() {
 #ifdef SIGNAL_DIGITAL
 
   c = getchar(); pos++;
-  if(sme_is_high(c)) current_pulse_len++;
-  else current_pulse_len = 0;
-
-  if(current_pulse_len > max_pulse_len) max_pulse_len = current_pulse_len;
 
   if(c == EOF) return EOF;
   return c == ONE ? 0xFE : 0;
 #else
 
-  int maxdiff = 0, i;
-  static int last = 0; 
-  for(i = 0 ; i < 64 ; i++) {
+  int i;
+  int lowest = 0xFF;
+  int highest = 0;
+  for(i = 0 ; i < 5 ; i++) {
     c = getchar(); pos++;
     //    printf(" %d(%d) ", c, last);
     if(c == EOF) return EOF;
-    maxdiff = MAX(c - last, maxdiff);
-    last = c;
+    if(c < lowest) lowest = c;
+    if(c > highest) highest = c;
   }
-  //  printf(" maxdiff = %d\n", maxdiff);
+  int maxdiff;
+  maxdiff = highest - lowest;
+  //printf(" maxdiff = %d\n", maxdiff);
+    return maxdiff;
+
   if(maxdiff > 0x10) return 0xFE;
   else return 0;
 
@@ -82,6 +126,14 @@ int read_signal() {
     _curr = _peek;
     _peek = read_signal_nobuffer();
   }
+
+  if(sme_is_high(_curr)) current_pulse_len++;
+  else current_pulse_len = 0;
+
+  if(current_pulse_len > max_pulse_len) max_pulse_len = current_pulse_len;
+
+  spectrum_add(_curr / 0x10);
+
   //if(sme_is_high(_curr)) printf("#");
   //else printf(".");
   return _curr;
@@ -122,14 +174,19 @@ int readbits(int clock_len) {
   int pulse_len = clock_len * 3;
   unsigned char p1, p2, byte;
 
+  if(verbose >10)
+    fprintf(stderr, "Reading 8-BIT sequence (pulse_len = %d) @ %d\n", pulse_len, pos);
+
   // read 8 bits
   for(bit = 0 ; bit < 8 ; bit++) {
     p1 = readavg(clock_len);
     p2 = readavg(clock_len);
     
     if(verbose>10)
-      fprintf(stderr, "   p1 %d   p2 %d  @ %d\n", p1, p2, pos);
+      fprintf(stderr, "  BITPAIR %d\t %d  @ %d\n", p1, p2, pos);
 
+    if(!sme_is_high(p1))
+      pulse_len = 0;
     if(sme_is_high(p1) && sme_is_high(p2)) {
       pulse_len += clock_len * 2;
       is_byte_valid = 0;
@@ -137,10 +194,8 @@ int readbits(int clock_len) {
     if(!sme_is_high(p1) && !sme_is_high(p2)) {
       is_byte_valid = 0;
     }
-    if(!is_byte_valid) {
-      fprintf(stderr, "data corrupt, skipping byte\n", p1, p2);
+    if(!is_byte_valid) 
       break;
-    }
 
     if(sme_is_high(p1)) byte = (byte << 1) | 0x01;
     else          byte = (byte << 1) | 0x00;
@@ -152,14 +207,24 @@ int readbits(int clock_len) {
   if(is_byte_valid)
     return byte;
   else {
-    printf("invalid byteseq @ %d, resuming with pulse_len %d\n", pos, pulse_len);
-    return -pulse_len;
+    if(verbose > 5)
+      fprintf(stderr, "invalid byteseq @ %d, resuming with pulse_len %d\n", pos, pulse_len);
+    return -(pulse_len + 1);
   }
 
 }
 
+static char keepRunning = 1;
+void intHandler(int dummy) {
+    keepRunning = 0;
+}
+
 int main(int args, char** argv) {
 
+  // allow us to exit this loop
+  // gracefully with C-c
+  signal(SIGINT, intHandler);
+  signal(SIGKILL, intHandler);
 
   int avg;
   int clock_len = 0;
@@ -168,13 +233,13 @@ int main(int args, char** argv) {
   int pulse_len = 0;
 
 
-  while(1) {
+  while(keepRunning) {
 
     int c;
     c = read_signal();//(pulse_len += readhighpulse()) != EOF) {
     if(c == EOF) break;
     if(verbose > 30)
-      printf("waiting for carrier ....\n");
+      fprintf(stderr, "waiting for carrier ....\n");
 
     if(sme_is_high(peek_signal())) {
         
@@ -183,7 +248,7 @@ int main(int args, char** argv) {
       // pulse_len is not always 0 here if reading last byte failed
       
       if(verbose>10)
-        fprintf(stderr, "PULSE UP (pulse = %d)\n", pulse_len);
+        fprintf(stderr, "PULSE UP (pulse_len = %d) @ %d\n", pulse_len, pos);
 
       while(sme_is_high(peek_signal())) {
         //printf("  peeking high pulse is %d @ %d\n", peek_signal(), pos);
@@ -209,6 +274,7 @@ int main(int args, char** argv) {
         if(verbose > 10) printf("low-gap after byte-mark missing or too short @ %d\n", pos);
         continue; // should be signal-low! (always gap after byte-mark)
       }
+      pulse_len = 0;
 
       if(verbose>30)
         fprintf(stderr, "   (l %d) gap  %d \n", clock_len, avg);
@@ -217,27 +283,42 @@ int main(int args, char** argv) {
       if(readstat >= 0) {
         // byte sequence read sucessfully
         clock_len = 0;
-        if(verbose>5)
-          fprintf(stderr, "BYTE OK: 0x%X (%d) char %c\n", readstat, readstat, (char)readstat);
-        printf("%c", readstat);
+        pulse_len = 0;
+        if(verbose>1)
+          fprintf(stderr, "BYTE OK: 0x%X (%d)\n", readstat, readstat);
+
+        putchar(readstat);
+        fflush(stdout);
       }
       else {
+        pulse_len = -readstat - 1;
         // byte-sequence corrupt
-        printf("BYTE FAIL: pulse-length kept as %d @ %d\n", pulse_len, pos);
-        pulse_len = -readstat;
+        if(verbose > 5)
+          fprintf(stderr,"BYTE FAIL: pulse-length kept as %d @ %d\n", pulse_len, pos);
+
       }
 
     }
-
     else {
+      // no signal
+      if(pulse_len > 0)
+        if(verbose > 10)
+          fprintf(stderr, "Pulselen killed @ %d\n", pos);
       if(verbose > 30)
-        printf("still at low @ %d \n", pos);
+        fprintf(stderr, "still at low @ %d \n", pos);
       pulse_len = 0;
     }
     
   }
 
-  //  fprintf(stderr, "clock_len was %d\n", clock_len);
+  printf("\n");
+  print_spectrum();
+  printf("%d bytes read\n", pos);
+  
+  
 
   return errors;
 }
+
+
+
