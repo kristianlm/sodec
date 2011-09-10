@@ -1,3 +1,12 @@
+/**
+
+  Very simple project for generating a manchester encoded signal.
+
+  Schematics for AVR is simple: connect any output on PORT_C to your line-in
+  on your sound-card with some resistors to reduce the voltage (5V to line-in is probably
+  too high).
+
+ */
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -6,6 +15,8 @@
 #include <avr/interrupt.h>
 
 
+// This is the length of the pulses.
+// Increasing lowers bandwidth but increases noise tolerance.
 #define PLEN 6
 
 int g = 0;
@@ -69,7 +80,10 @@ static void bang_bit(char bit) {
   if(bit) push_one();
   else push_zero();
 }
-
+/**
+   This function is called by the stdio library, called
+   per-byte when you do things like printf.
+ */
 static int uart_putchar(char c, FILE *stream) {
 	if (c == '\n')
 		uart_putchar('\r', stream);
