@@ -4,11 +4,10 @@
   [Manchester Encoded]: http://en.wikipedia.org/wiki/Manchester_encoding
   [aplay]:http://en.wikipedia.org/wiki/Aplay
   
-A test-project for making a serial connection from my [AVR] to my PC
+A test-project for making a 1-pin serial connection from my [AVR] to my PC
 using a simple [Manchester Encoded] signal variant.
-
-My setup involves signal from a digital-out [AVR]-pin into a
-sound-card's line-in. I haven't gotten it to work on anything faster than 60 bps.
+The setup involves signal from a digital-out [AVR]-pin into a
+sound-card's line-in.
 
 Since it's 1-pin, it is also possible to transmit the signal wirelessly using IR diodes or by
 using a speaker and a mic.
@@ -20,11 +19,14 @@ $ cmake .
 $ make
 ```
 
-## Trying it out
+## The Signal
 
 `gen` will encode each byte from stdin
 into a sequence of bits where `#` is on and `.` is off, one byte per line.
 The clock is encoded in the signal (as always with [Manchester encoding][Manchester encoded]).
+Synchronization occurs at the start of each byte. Three subsequent `#`'s, 
+which the input data-stream cannot produce, indicate the start of 
+a byte and sets the clock freqnezy.
 
 ```bash
 $ echo -n hello world | ./gen
