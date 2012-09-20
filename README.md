@@ -2,13 +2,27 @@
 
   [AVR]:http://en.wikipedia.org/wiki/Atmel_AVR
   [Manchester Encoded]: http://en.wikipedia.org/wiki/Manchester_encoding
+  [aplay]:http://en.wikipedia.org/wiki/Aplay
   
-My test-project for making a serial connection from my [AVR] to my PC.
-I am using my homebrew simple [Manchester Encoded] signal.
+A test-project for making a serial connection from my [AVR] to my PC
+using a simple [Manchester Encoded] signal variant.
 
-I haven't gotten it to work on anything faster than 60 bps.
+My setup involves signal from a digital-out [AVR]-pin into a
+sound-card's line-in. I haven't gotten it to work on anything faster than 60 bps.
 
-You can clone and try this from your terminal
+Since it's 1-pin, it is also possible to transmit the signal wirelessly using IR diodes or by
+using a speaker and a mic.
+
+## Building
+
+```bash
+$ cmake .
+$ make
+```
+
+## Trying it out
+
+`gen` will encode into a line where `#` is on and `.` is off:
 
 ```bash
 $ echo -n hello world | ./gen
@@ -25,16 +39,16 @@ $ echo -n hello world | ./gen
 .###..##.#..#.##..#.#
 ```
 
-Where `gen` is a tool to output my homebrew signal. 
+`gen` can be configured to output sinus waves (AUDIO_OUTPUT) which can be piped to [aplay], for example.
 
-You can generate the same signal from the small avr sodec folder. 
-Schematics for the [AVR] are incredibly simple. 
-Then, once your [AVR] is connected to your line-in, you can do:
+You can generate the same signal from the project in the `avr`
+subfolder. Then, once your [AVR] output pin is connected to your
+sound-card's line-in, you can do:
 
 ```bash
 $ arecord -f u8 -r 44100 | ./sodec | dd bs=1
 Recording WAVE 'stdin' : Unsigned 8 bit, Rate 44100 Hz, Mono
-Hello World!
+Hello World from AVR!
 Counter: 1
 Counter: 2
 Counter: 3
@@ -44,4 +58,5 @@ Count^C
 51 bytes (51 B) copied, 6.94628 s, 0.0 kB/s
 ```
 
-`dd` is too slow for `dd` to bother calculating the bandwidth, which is at around 60 bps.
+The bandwidth seems to be too slow for `dd` to pick up,
+which ends up at a staggering 60 bps.
