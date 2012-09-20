@@ -22,7 +22,9 @@ $ make
 
 ## Trying it out
 
-`gen` will encode into a line where `#` is on and `.` is off:
+`gen` will encode each byte from stdin
+into a sequence of bits where `#` is on and `.` is off, one byte per line.
+The clock is encoded in the signal (as always with [Manchester encoding][Manchester encoded]).
 
 ```bash
 $ echo -n hello world | ./gen
